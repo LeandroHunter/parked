@@ -693,6 +693,17 @@ async function main(): Promise<void> {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   const forced = new URLSearchParams(location.search).get('sw') === '1';
   if ('serviceWorker' in navigator && (!local || forced) && !simulate) {
+    // When a newer version takes over, show it straight away instead of on the launch after next.
+    // Only if this page was already running an older version (not on the very first visit), and
+    // only while nothing is in progress: a save or live guidance is never interrupted for an update.
+    const hadWorker = navigator.serviceWorker.controller !== null;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      const busy = saving || guide.isOpen || document.querySelector('dialog[open]') !== null;
+      if (!hadWorker || reloaded || busy) return;
+      reloaded = true;
+      location.reload();
+    });
     navigator.serviceWorker.register('sw.js').catch((error) => console.warn('Offline support unavailable', error));
   }
 }

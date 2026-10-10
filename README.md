@@ -47,18 +47,16 @@ runs the type-check, the unit tests and the build.
 
 ## Put it on your iPhone
 
+It is live at **<https://leandrohunter.github.io/parked/>**.
+
 Safari only gives a page location and compass access over **https**, so the phone cannot use the
-`localhost` address above. The built site in `dist/` is plain static files and can be hosted anywhere
-that serves https.
+`localhost` address above. The site is hosted on GitHub Pages: `.github/workflows/deploy.yml` runs the
+type-check and tests, builds, and publishes on every push to `main`. The built site in `dist/` is plain
+static files, so it could equally be uploaded to any other https host.
 
-- **GitHub Pages** — `.github/workflows/deploy.yml` tests, builds and publishes on every push to `main`.
-  In the repository, set Settings › Pages › Source to *GitHub Actions*. On a free GitHub plan the
-  repository has to be public (the code, not your data).
-- **Cloudflare Pages, Netlify, or your own domain** — run `npm run build` and upload the `dist/` folder.
+On the iPhone:
 
-Then, on the iPhone:
-
-1. Open the https address in **Safari**.
+1. Open <https://leandrohunter.github.io/parked/> in **Safari**.
 2. Tap Share › **Add to Home Screen**. Do this: iOS may clear a website's storage after seven days
    without a visit, and Home Screen apps are exempt from that.
 3. Open Parked from the Home Screen. The first tap on **Parked** asks for location (choose *Allow While

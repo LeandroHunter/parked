@@ -9,6 +9,7 @@ import { currentScreenAngle, type CompassSource } from '../platform/compass.ts';
 import type { ScreenWake } from '../platform/device.ts';
 import type { LocationFailure, LocationSource } from '../platform/location.ts';
 import { byId, setAttr, setHidden, setText, svgById } from './dom.ts';
+import { language, t } from './language.ts';
 
 export type GuideDependencies = {
   location: LocationSource;
@@ -24,6 +25,8 @@ export type GuideDependencies = {
 /** How long we say "finding you…" before admitting there is no signal. */
 const LOCATION_GRACE_MS = 10_000;
 const COMPASS_GRACE_MS = 3_500;
+/** Below this height the dial is unreadable, so it is hidden and the text carries the screen. */
+const DIAL_MIN_READABLE_PX = 96;
 /** Recompute declination only after moving this far; it changes by a fraction of a degree per 100 km. */
 const DECLINATION_REFRESH_M = 25_000;
 /** Beyond this spread the arrow is drawn as an outline: a rough direction, not a pointer. */
@@ -112,6 +115,12 @@ export class GuideView {
     this.deps = deps;
     this.drawTicks();
 
+    // The dial flexes to fit the screen. If advice text leaves it only a sliver, hide it.
+    new ResizeObserver(([entry]) => {
+      const height = entry?.contentRect.height ?? 0;
+      this.dial.toggleAttribute('data-tiny', height > 0 && height < DIAL_MIN_READABLE_PX);
+    }).observe(this.dial);
+
     byId('guide-back').addEventListener('click', () => deps.onBack());
     byId('guide-found').addEventListener('click', () => deps.onFound());
     byId('guide-map').addEventListener('click', () => deps.onOpenMap());
@@ -162,7 +171,7 @@ export class GuideView {
     if (this.session) this.session = session;
     const facts = byId('guide-facts');
     facts.replaceChildren();
-    for (const [label, value] of [['Level', session.level], ['Note', session.note]] as const) {
+    for (const [label, value] of [[t('facts.level'), session.level], [t('facts.note'), session.note]] as const) {
       if (!value) continue;
       const row = document.createElement('div');
       const term = document.createElement('dt');
@@ -293,41 +302,45 @@ export class GuideView {
 
     let caption = '';
     if (dialMode === 'off') {
-      if (locating) caption = 'Finding you…';
-      else if (state.mode === 'no-location') caption = this.failure === 'denied' ? 'Location is off' : 'No location';
-      else if (state.issues.includes('compass-permission')) caption = 'Compass is off';
-      else if (state.issues.includes('compass-missing') && compassSettling) caption = 'Reading compass…';
-      else caption = 'No reliable direction';
+      if (locating) caption = t('dial.finding');
+      else if (state.mode === 'no-location') caption = t(this.failure === 'denied' ? 'dial.locationOff' : 'dial.noLocation');
+      else if (state.issues.includes('compass-permission')) caption = t('dial.compassOff');
+      else if (state.issues.includes('compass-missing') && compassSettling) caption = t('dial.readingCompass');
+      else caption = t('dial.noDirection');
     }
     setText(this.caption, caption);
 
     // ---- distance
     const units = this.deps.units;
+    const lang = language();
     let phrase = false;
     if (state.mode === 'near') {
       phrase = true;
-      setText(this.distanceValue, 'Near your saved spot');
+      setText(this.distanceValue, t('near.title'));
       setText(this.distanceUnit, '');
-      const radius = formatDistance(Math.ceil((state.nearRadiusM ?? 10) / 5) * 5, 99, units);
-      setText(this.distanceCaption, `Within about ${radius.value} ${radius.unit}. Look around, and check your note or photo.`);
+      const radius = formatDistance(Math.ceil((state.nearRadiusM ?? 10) / 5) * 5, 99, units, lang);
+      setText(this.distanceCaption, t('near.caption', { distance: `${radius.value}\u00a0${radius.unit}` }));
     } else if (state.distanceM !== null) {
-      const text = formatDistance(state.distanceM, state.uncertaintyM ?? 0, units);
+      const text = formatDistance(state.distanceM, state.uncertaintyM ?? 0, units, lang);
       // With a weak or out-of-date fix the number is a rough figure, and is marked as one.
       const rough = state.locationQuality === 'poor' || state.locationQuality === 'stale';
       setText(this.distanceValue, rough ? `≈${text.value}` : text.value);
       setText(this.distanceUnit, text.unit);
       if (state.distanceIsStale && this.location) {
-        const age = Math.round((now - this.location.timestampMs) / 1000);
-        setText(this.distanceCaption, `Last known distance, ${age < 90 ? `${age} s` : `${Math.round(age / 60)} min`} old`);
+        const seconds = Math.round((now - this.location.timestampMs) / 1000);
+        const age =
+          seconds < 90 ? t('age.seconds', { count: seconds }) : t('age.minutes', { count: Math.round(seconds / 60) });
+        setText(this.distanceCaption, t('distance.stale', { age }));
       } else if (state.mode === 'distance-only' && state.bearingDeg !== null) {
-        setText(this.distanceCaption, `in a straight line, to the ${cardinalDirection(state.bearingDeg)}`);
+        const direction = t(`cardinal.${cardinalDirection(state.bearingDeg)}`);
+        setText(this.distanceCaption, t('distance.straightTo', { direction }));
       } else {
-        setText(this.distanceCaption, 'in a straight line');
+        setText(this.distanceCaption, t('distance.straight'));
       }
     } else {
       setText(this.distanceValue, '–');
       setText(this.distanceUnit, '');
-      setText(this.distanceCaption, locating ? 'Getting a fresh location…' : 'Distance unknown');
+      setText(this.distanceCaption, t(locating ? 'distance.locating' : 'distance.unknown'));
     }
     this.distance.classList.toggle('is-phrase', phrase);
     this.distance.classList.toggle('is-stale', state.distanceIsStale);
@@ -338,12 +351,10 @@ export class GuideView {
     setText(
       this.signalLocationText,
       state.locationQuality === 'none'
-        ? locating
-          ? 'Locating…'
-          : 'No location'
+        ? t(locating ? 'signal.locating' : 'signal.noLocation')
         : state.locationQuality === 'stale'
-          ? 'Location out of date'
-          : `Location ${formatAccuracy(state.locationAccuracyM ?? 0, units)}`,
+          ? t('signal.locationStale')
+          : t('signal.location', { accuracy: formatAccuracy(state.locationAccuracyM ?? 0, units, lang) }),
     );
     setAttr(this.signalCompass, 'data-level', quality[state.compassQuality]);
     const compassOff =
@@ -353,14 +364,12 @@ export class GuideView {
     setText(
       this.signalCompassText,
       compassOff
-        ? 'Compass off'
+        ? t('signal.compassOff')
         : state.compassQuality === 'none'
-          ? compassSettling
-            ? 'Reading compass…'
-            : 'No compass reading'
+          ? t(compassSettling ? 'signal.readingCompass' : 'signal.noCompass')
           : state.compassQuality === 'stale'
-            ? 'Compass stopped'
-            : `Compass ${state.compassQuality}`,
+            ? t('signal.compassStopped')
+            : t(`signal.compass.${state.compassQuality}`),
     );
 
     // ---- one line of advice
@@ -379,63 +388,60 @@ export class GuideView {
 
     // ---- VoiceOver
     setAttr(this.dial, 'aria-label', this.describe(state, locating));
-    const modeKey = `${state.mode}:${issue ?? ''}`;
+    const modeKey = `${state.mode}:${issue ?? ''}:${lang}`;
     if (modeKey !== this.lastMode) {
       const first = this.lastMode === null;
       this.lastMode = modeKey;
       // Announce changes of situation, not every movement of the arrow.
       if (!first || state.mode === 'near') {
-        setText(this.announcer, state.mode === 'near' ? 'Near your saved spot.' : advice);
+        setText(this.announcer, state.mode === 'near' ? t('spoken.nearShort') : advice);
       }
     }
   }
 
   private adviceFor(issue: GuidanceIssue, state: GuidanceState): string {
-    const units = this.deps.units;
     switch (issue) {
       case 'location-missing':
-        if (this.failure === 'denied') {
-          return 'Parked can’t see your location. In Settings › Privacy & Security › Location Services, turn Location Services on and set Safari Websites (or Parked) to While Using.';
-        }
-        if (this.failure === 'insecure') return 'Location only works on a secure (https) page.';
-        if (this.failure === 'unsupported') return 'This browser does not provide location.';
-        return 'No location signal. Move into the open, away from tall buildings and out of car parks.';
+        if (this.failure === 'denied') return t('advice.location.denied');
+        if (this.failure === 'insecure') return t('advice.location.insecure');
+        if (this.failure === 'unsupported') return t('advice.location.unsupported');
+        return t('advice.location.missing');
       case 'location-stale':
-        return 'Your location has stopped updating. Move into the open; the arrow returns when a fresh fix arrives.';
+        return t('advice.location.stale');
       case 'location-approximate':
-        return 'iOS is only sharing your approximate location. Turn on Precise Location for this site in Settings › Privacy & Security › Location Services.';
+        return t('advice.location.approximate');
       case 'location-weak':
-        return `Weak location signal (${formatAccuracy(state.locationAccuracyM ?? 0, units)}). Move into the open for a steadier direction.`;
+        return t('advice.location.weak', {
+          accuracy: formatAccuracy(state.locationAccuracyM ?? 0, this.deps.units, language()),
+        });
       case 'spot-approximate':
-        return 'This spot was saved with a vague location. Treat the direction as a rough area and rely on your note or photo.';
+        return t('advice.spot.approximate');
       case 'compass-permission':
-        return 'The arrow needs your phone’s compass. Tap Enable compass, then Allow.';
+        return t('advice.compass.permission');
       case 'compass-denied':
-        return 'Compass access was declined, so there is no arrow. Close this page completely, open it again and choose Allow. The distance and map still work.';
+        return t('advice.compass.denied');
       case 'compass-unsupported':
-        return 'This device is not providing a compass, so there is no arrow. Use the distance and the map.';
+        return t('advice.compass.unsupported');
       case 'compass-missing':
-        return 'Waiting for the compass. Hold the phone flat and move it a little.';
+        return t('advice.compass.missing');
       case 'compass-stale':
-        return 'Compass readings have stopped. Hold the phone flat and move it a little.';
+        return t('advice.compass.stale');
       case 'compass-uncalibrated':
-        return 'The compass needs calibrating. Move the phone in a figure of eight, away from cars and metal.';
+        return t('advice.compass.uncalibrated');
       case 'compass-poor':
-        return 'Compass accuracy is low. Step away from cars and metal and move the phone in a figure of eight.';
+        return t('advice.compass.poor');
       case 'magnetic-north':
-        return 'Using magnetic north; the direction may be a few degrees off.';
+        return t('advice.compass.magnetic');
     }
   }
 
   private describe(state: GuidanceState, locating: boolean): string {
-    const units = this.deps.units;
-    if (state.mode === 'near') return 'Near your saved spot. No direction is shown this close.';
-    if (state.distanceM === null) return locating ? 'Finding your location.' : 'No location. Direction unavailable.';
-    const distance = formatDistance(state.distanceM, state.uncertaintyM ?? 0, units).spoken;
-    if (state.arrowDeg === null) return `Your car is ${distance} away. Direction unavailable.`;
-    const hour = clockPosition(state.arrowDeg);
-    const rough = state.spreadDeg !== null && state.spreadDeg > ROUGH_SPREAD_DEG ? 'roughly ' : '';
-    return `Your car is ${rough}at ${hour} o’clock, ${distance} away in a straight line.`;
+    if (state.mode === 'near') return t('spoken.near');
+    if (state.distanceM === null) return t(locating ? 'spoken.finding' : 'spoken.noLocation');
+    const distance = formatDistance(state.distanceM, state.uncertaintyM ?? 0, this.deps.units, language()).spoken;
+    if (state.arrowDeg === null) return t('spoken.noDirection', { distance });
+    const rough = state.spreadDeg !== null && state.spreadDeg > ROUGH_SPREAD_DEG;
+    return t(rough ? 'spoken.arrowRough' : 'spoken.arrow', { hour: clockPosition(state.arrowDeg), distance });
   }
 
   private drawTicks(): void {

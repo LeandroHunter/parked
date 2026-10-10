@@ -10,8 +10,10 @@ import { BrowserLocation, type LocationFailure, type LocationSource } from './pl
 import { IndexedDbBackend, requestPersistentStorage } from './platform/storage.ts';
 import { byId, confirmSheet, openSheet, svgById, toast } from './ui/dom.ts';
 import { GuideView } from './ui/guide.ts';
+import { initLanguage, language, localeTag, onLanguageChange, t } from './ui/language.ts';
 import { createPinPicker, createSpotMap, type PinPicker, type SpotMap } from './ui/map.ts';
 import { photoToUrl, preparePhoto } from './ui/photo.ts';
+import { lockViewport } from './ui/viewport.ts';
 
 type Problem = LocationFailure | 'no-fix' | 'storage' | 'interrupted' | 'corrupt';
 
@@ -26,6 +28,9 @@ const simulate = new URLSearchParams(location.search).get('sim') === '1';
 const units = unitSystemFor(navigator.language);
 
 async function main(): Promise<void> {
+  initLanguage();
+  lockViewport();
+
   let locationSource: LocationSource;
   let compassSource: CompassSource;
   if (simulate) {
@@ -50,15 +55,22 @@ async function main(): Promise<void> {
   let cancelAcquisition: (() => void) | null = null;
 
   const home = byId('home');
+  /** Redraws whichever home panel is showing; used when the language is switched. */
+  let redraw: (() => void) | null = null;
 
   // ---------------------------------------------------------------------------------- rendering
 
   function show(section: Section, focusId?: string): void {
     for (const id of SECTIONS) byId(id).hidden = id !== section;
+    // Switching language in the middle of a save would only confuse; it is back a moment later.
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-language]')) {
+      button.disabled = section === 'home-saving';
+    }
     if (focusId) byId(focusId).focus({ preventScroll: true });
   }
 
   function showIdle(focus = false): void {
+    redraw = () => showIdle();
     if (session) {
       renderSaved();
       show('home-saved', focus ? 'saved-title' : undefined);
@@ -70,22 +82,25 @@ async function main(): Promise<void> {
 
   function parkedAtText(parkedAtMs: number): string {
     const date = new Date(parkedAtMs);
-    const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    const sameDay = date.toDateString() === new Date().toDateString();
-    return sameDay ? `at ${time}` : `${date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}, ${time}`;
+    const time = date.toLocaleTimeString(localeTag(), { hour: 'numeric', minute: '2-digit' });
+    if (date.toDateString() === new Date().toDateString()) return t('saved.whenToday', { time });
+    const day = date.toLocaleDateString(localeTag(), { weekday: 'short', day: 'numeric', month: 'short' });
+    return t('saved.whenOther', { date: day, time });
   }
+
+  const accuracyText = (accuracyM: number) => formatAccuracy(accuracyM, units, language());
+  const elapsedText = (parkedAtMs: number) => formatElapsed(parkedAtMs, Date.now(), language());
 
   function accuracySentence(current: ParkingSession): string {
     const when = parkedAtText(current.parkedAtMs);
-    if (current.source === 'manual') return `Saved ${when}. You placed the pin on the map by hand.`;
-    const accuracy = formatAccuracy(current.accuracyM, units);
-    if (current.source === 'gps-approximate') return `Saved ${when}. Approximate spot only: ${accuracy}.`;
-    return `Saved ${when}, accurate to about ${accuracy}.`;
+    if (current.source === 'manual') return t('saved.manual', { when });
+    const accuracy = accuracyText(current.accuracyM);
+    return t(current.source === 'gps-approximate' ? 'saved.approx' : 'saved.gps', { when, accuracy });
   }
 
   function fillFacts(target: HTMLElement, current: ParkingSession): void {
     target.replaceChildren();
-    for (const [label, value] of [['Level', current.level], ['Note', current.note]] as const) {
+    for (const [label, value] of [[t('facts.level'), current.level], [t('facts.note'), current.note]] as const) {
       if (!value) continue;
       const row = document.createElement('div');
       const term = document.createElement('dt');
@@ -99,11 +114,11 @@ async function main(): Promise<void> {
 
   function renderSaved(): void {
     if (!session) return;
-    byId('saved-title').textContent = `Parked ${formatElapsed(session.parkedAtMs, Date.now())}`;
+    byId('saved-title').textContent = t('saved.title', { elapsed: elapsedText(session.parkedAtMs) });
     byId('saved-accuracy').textContent = accuracySentence(session);
     fillFacts(byId('saved-facts'), session);
     const hasDetails = Boolean(session.level || session.note || session.hasPhoto);
-    byId('details-button').textContent = hasDetails ? 'Edit details' : 'Add level, bay or photo';
+    byId('details-button').textContent = t(hasDetails ? 'saved.editDetails' : 'saved.addDetails');
     const photo = byId<HTMLButtonElement>('saved-photo');
     photo.hidden = !photoUrl;
     const image = photo.querySelector('img');
@@ -131,29 +146,22 @@ async function main(): Promise<void> {
     if (!byId('home-saved').hidden || !byId('home-empty').hidden) showIdle();
   }
 
-  function showProblem(problem: Problem): void {
-    const keptNote = session ? ' Your previous spot is still saved.' : '';
+  function showProblem(problem: Problem, focus = true): void {
+    redraw = () => showProblem(problem, false);
+    const kept = session ? ` ${t('common.previousKept')}` : '';
     const steps = byId('problem-steps');
     steps.hidden = true;
     steps.replaceChildren();
-    let title = 'Couldn’t save your spot';
+    let title = t('problem.title');
     let detail = '';
-    let retry = 'Try again';
+    let retry = t('common.tryAgain');
     switch (problem) {
       case 'denied': {
-        title = 'Location is off for Parked';
-        detail = `Parked needs your location for a moment to save where the car is.${keptNote}`;
+        title = t('problem.denied.title');
+        detail = t('problem.denied.detail') + kept;
         const list = isInstalled()
-          ? [
-              'Open Settings › Privacy & Security › Location Services and make sure it is on.',
-              'In the same list, find Parked (or Safari Websites) and choose While Using the App.',
-              'Turn on Precise Location, then come back and try again.',
-            ]
-          : [
-              'Open Settings › Privacy & Security › Location Services and make sure it is on.',
-              'Tap Safari Websites and choose While Using the App, with Precise Location on.',
-              'If you tapped “Don’t Allow” on this page: reload it and choose Allow.',
-            ];
+          ? [t('problem.denied.step1'), t('problem.denied.app.step2'), t('problem.denied.app.step3')]
+          : [t('problem.denied.step1'), t('problem.denied.web.step2'), t('problem.denied.web.step3')];
         for (const text of list) {
           const item = document.createElement('li');
           item.textContent = text;
@@ -165,28 +173,28 @@ async function main(): Promise<void> {
       case 'no-fix':
       case 'unavailable':
       case 'timeout':
-        title = 'No location signal';
-        detail = `No fresh GPS fix arrived within ${Math.round(DEFAULT_ACQUISITION.windowMs / 1000)} seconds, so nothing was saved. Step into the open, away from the car park roof or tall buildings, and try again.${keptNote}`;
+        title = t('problem.noFix.title');
+        detail = t('problem.noFix.detail', { seconds: Math.round(DEFAULT_ACQUISITION.windowMs / 1000) }) + kept;
         break;
       case 'unsupported':
-        title = 'Location isn’t available';
-        detail = 'This browser does not provide location, so Parked cannot save a spot here.';
+        title = t('problem.unsupported.title');
+        detail = t('problem.unsupported.detail');
         break;
       case 'insecure':
-        title = 'Secure connection needed';
-        detail = 'Browsers only share location with pages loaded over https. Open Parked from its https address.';
+        title = t('problem.insecure.title');
+        detail = t('problem.insecure.detail');
         break;
       case 'storage':
-        detail = `The location was found but could not be written to this phone’s storage, so it was not saved. If you are in Private Browsing, switch to a normal tab. Otherwise free up some space and try again.${keptNote}`;
+        detail = t('problem.storage.detail') + kept;
         break;
       case 'interrupted':
-        title = 'Saving was interrupted';
-        detail = `Parked went to the background before a location was saved, so nothing was changed.${keptNote}`;
+        title = t('problem.interrupted.title');
+        detail = t('problem.interrupted.detail') + kept;
         break;
       case 'corrupt':
-        title = 'Saved spot can’t be read';
-        detail = 'The stored parking spot is damaged and cannot be shown. You can clear it and save a new one.';
-        retry = 'Clear it';
+        title = t('problem.corrupt.title');
+        detail = t('problem.corrupt.detail');
+        retry = t('problem.corrupt.clear');
         break;
     }
     byId('problem-title').textContent = title;
@@ -201,12 +209,12 @@ async function main(): Promise<void> {
               session = null;
               showIdle(true);
             } catch {
-              toast('The damaged spot could not be cleared.');
+              toast(t('toast.corruptClearFailed'));
             }
           }
         : () => void startParking();
     byId('problem-cancel').hidden = problem === 'corrupt';
-    show('home-problem', 'problem-title');
+    show('home-problem', focus ? 'problem-title' : undefined);
   }
 
   // ------------------------------------------------------------------------------------ parking
@@ -218,6 +226,7 @@ async function main(): Promise<void> {
   function startParking(): void {
     if (saving) return;
     saving = true;
+    redraw = null;
 
     const progress = byId('saving-progress');
     const ring = svgById('saving-ring');
@@ -226,8 +235,8 @@ async function main(): Promise<void> {
     progress.classList.remove('is-done');
     ring.style.strokeDashoffset = '100';
     accuracyLabel.textContent = '';
-    detail.textContent = 'Getting a fresh GPS fix.';
-    byId('saving-title').textContent = 'Saving your spot…';
+    detail.textContent = t('saving.start');
+    byId('saving-title').textContent = t('saving.title');
     byId<HTMLButtonElement>('saving-cancel').hidden = false;
     show('home-saving', 'saving-title');
 
@@ -287,8 +296,8 @@ async function main(): Promise<void> {
       progress.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
       const best = collector.best;
       if (best) {
-        accuracyLabel.textContent = formatAccuracy(best.accuracyM, units);
-        detail.textContent = 'Waiting a moment for the most accurate fix.';
+        accuracyLabel.textContent = accuracyText(best.accuracyM);
+        detail.textContent = t('saving.waiting');
       }
       if (collector.isComplete(now)) finish();
     }, 100);
@@ -296,7 +305,7 @@ async function main(): Promise<void> {
     void locationSource.permission().then((state) => {
       if (settled || responded || state !== 'prompt') return;
       awaitingPermission = true;
-      detail.textContent = 'Allow location access so Parked can save this spot.';
+      detail.textContent = t('saving.permission');
     });
 
     locationSource.start(
@@ -308,7 +317,7 @@ async function main(): Promise<void> {
           awaitingPermission = false;
           collectingSince = Date.now();
           collector = new FixCollector(collectingSince);
-          detail.textContent = 'Getting a fresh GPS fix.';
+          detail.textContent = t('saving.start');
         }
         collector.offer(sample, Date.now());
       },
@@ -324,12 +333,12 @@ async function main(): Promise<void> {
     return { latitude: sample.latitude, longitude: sample.longitude };
   }
 
-  function showDecision(fix: LocationSample, startedAt: number): void {
-    const accuracy = formatAccuracy(fix.accuracyM, units);
+  function showDecision(fix: LocationSample, startedAt: number, focus = true): void {
+    redraw = () => showDecision(fix, startedAt, false);
+    const accuracy = accuracyText(fix.accuracyM);
     byId('decision-detail').textContent =
-      `The best fix was only accurate to about ${accuracy}. That is a rough area, not a parking space, so it has not been saved yet.` +
-      (session ? ' Your previous spot is still saved.' : '');
-    byId('decision-approx').textContent = `Save approximate spot (${accuracy})`;
+      t('decision.detail', { accuracy }) + (session ? ` ${t('common.previousKept')}` : '');
+    byId('decision-approx').textContent = t('decision.approx', { accuracy });
     byId('decision-retry').onclick = () => void startParking();
     byId('decision-cancel').onclick = () => showIdle(true);
     byId('decision-approx').onclick = () => {
@@ -344,7 +353,7 @@ async function main(): Promise<void> {
         return commit({ ...coordinate, accuracyM: MANUAL_PIN_ACCURACY_M, parkedAtMs: startedAt, source: 'manual' }, false);
       });
     };
-    show('home-decision', 'decision-title');
+    show('home-decision', focus ? 'decision-title' : undefined);
   }
 
   /** Writes the spot. Success is only shown after the store has read the record back. */
@@ -356,14 +365,14 @@ async function main(): Promise<void> {
       haptic('success');
       if (celebrate) {
         byId<HTMLButtonElement>('saving-cancel').hidden = true;
-        byId('saving-title').textContent = 'Spot saved';
-        byId('saving-detail').textContent = `Accurate to about ${formatAccuracy(saved.accuracyM, units)}.`;
+        byId('saving-title').textContent = t('saving.doneTitle');
+        byId('saving-detail').textContent = t('saving.doneDetail', { accuracy: accuracyText(saved.accuracyM) });
         byId('saving-progress').classList.add('is-done');
         await new Promise((resolve) => setTimeout(resolve, 850));
       }
       await adopt(saved);
       showIdle(true);
-      if (!celebrate) toast('Spot saved.');
+      if (!celebrate) toast(t('toast.saved'));
       return true;
     } catch (error) {
       saving = false;
@@ -386,7 +395,7 @@ async function main(): Promise<void> {
     const error = byId('pin-error');
     const note = byId('pin-note');
     error.hidden = true;
-    note.textContent = 'Drag the map until the pin sits on your car.';
+    note.textContent = t('pin.note');
     openSheet(dialog, () => {});
     const close = () => {
       pinPicker?.destroy();
@@ -403,11 +412,11 @@ async function main(): Promise<void> {
     try {
       pinPicker?.destroy();
       pinPicker = await createPinPicker(byId('pin-map'), start, accuracyM, () => {
-        note.textContent = 'Map tiles need an internet connection. Without them, the pin cannot be placed reliably.';
+        note.textContent = t('pin.tiles');
       });
       save.disabled = false;
     } catch {
-      error.textContent = 'The map could not be loaded. Check your connection and try again.';
+      error.textContent = t('pin.loadError');
       error.hidden = false;
       return;
     }
@@ -418,7 +427,7 @@ async function main(): Promise<void> {
       save.disabled = false;
       if (ok) close();
       else {
-        error.textContent = 'The pin could not be saved.';
+        error.textContent = t('pin.saveError');
         error.hidden = false;
       }
     };
@@ -435,7 +444,7 @@ async function main(): Promise<void> {
     const preview = byId<HTMLImageElement>('details-photo-preview');
     preview.hidden = !photoUrl;
     if (photoUrl) preview.src = photoUrl;
-    byId('details-photo-pick-text').textContent = photoUrl ? 'Replace photo' : 'Add a photo';
+    byId('details-photo-pick-text').textContent = t(photoUrl ? 'details.replacePhoto' : 'details.addPhoto');
     byId('details-photo-remove').hidden = !photoUrl;
   }
 
@@ -461,7 +470,7 @@ async function main(): Promise<void> {
       detailsSheet.close();
     } catch (error) {
       console.error(error);
-      detailsError.textContent = 'These details could not be saved. Your parking spot itself is unchanged.';
+      detailsError.textContent = t('details.saveError');
       detailsError.hidden = false;
     }
   }
@@ -483,7 +492,7 @@ async function main(): Promise<void> {
       renderDetailsPhoto();
     } catch (error) {
       console.error(error);
-      detailsError.textContent = 'That photo could not be saved. Try a different one.';
+      detailsError.textContent = t('details.photoError');
       detailsError.hidden = false;
     }
   });
@@ -494,7 +503,7 @@ async function main(): Promise<void> {
       await adopt(await store.setPhoto(session.id, null));
       renderDetailsPhoto();
     } catch {
-      detailsError.textContent = 'The photo could not be removed.';
+      detailsError.textContent = t('details.photoRemoveError');
       detailsError.hidden = false;
     }
   });
@@ -505,7 +514,7 @@ async function main(): Promise<void> {
     void pickPin(current, null, async (coordinate) => {
       try {
         await adopt(await store.movePin(current.id, coordinate));
-        toast('Pin moved.');
+        toast(t('pin.moved'));
         return true;
       } catch (error) {
         console.error(error);
@@ -537,14 +546,12 @@ async function main(): Promise<void> {
   async function openMap(): Promise<void> {
     if (!session) return;
     const note = byId('map-note');
-    note.textContent = navigator.onLine
-      ? 'Red is your saved spot. The dark dot is you.'
-      : 'You appear to be offline, so the map background may be blank. The markers are still correct.';
+    note.textContent = t(navigator.onLine ? 'map.note' : 'map.offline');
     openSheet(mapSheet, closeMap);
     try {
       spotMap?.destroy();
-      spotMap = await createSpotMap(byId('spot-map'), session, () => {
-        note.textContent = 'Map tiles need an internet connection. The markers are still correct.';
+      spotMap = await createSpotMap(byId('spot-map'), session, { car: t('map.car'), me: t('map.me') }, () => {
+        note.textContent = t('map.tiles');
       });
       const update = () => {
         const me = guide.latestLocation;
@@ -553,7 +560,7 @@ async function main(): Promise<void> {
       update();
       spotMapTimer = setInterval(update, 1000);
     } catch {
-      note.textContent = 'The map could not be loaded. Check your connection.';
+      note.textContent = t('map.loadError');
     }
   }
 
@@ -565,17 +572,17 @@ async function main(): Promise<void> {
   async function endSession(): Promise<boolean> {
     if (!session) return false;
     const confirmed = await confirmSheet({
-      title: 'Found your car?',
-      text: 'This ends the parking session and removes the saved spot, note and photo from this phone.',
-      confirmLabel: 'Yes, end session',
-      cancelLabel: 'Not yet',
+      title: t('found.title'),
+      text: t('found.text'),
+      confirmLabel: t('found.yes'),
+      cancelLabel: t('found.no'),
     });
     if (!confirmed) return false;
     try {
       await store.clear();
     } catch (error) {
       console.error(error);
-      toast('The spot could not be removed. Please try again.');
+      toast(t('toast.clearFailed'));
       return false;
     }
     haptic('tap');
@@ -587,7 +594,7 @@ async function main(): Promise<void> {
     session = null;
     await refreshPhoto();
     showIdle(true);
-    toast('Parking session ended.');
+    toast(t('toast.ended'));
     return true;
   }
 
@@ -637,13 +644,15 @@ async function main(): Promise<void> {
   byId('repark-button').addEventListener('click', async () => {
     if (!session || saving) return;
     const confirmed = await confirmSheet({
-      title: 'Replace your saved spot?',
-      text: `Your current spot (parked ${formatElapsed(session.parkedAtMs, Date.now())}) is kept until the new one has been saved, then replaced along with its note and photo.`,
-      confirmLabel: 'Save a new spot here',
-      cancelLabel: 'Keep current spot',
+      title: t('replace.title'),
+      text: t('replace.text', { elapsed: elapsedText(session.parkedAtMs) }),
+      confirmLabel: t('replace.yes'),
+      cancelLabel: t('replace.no'),
     });
     if (confirmed) startParking();
   });
+
+  onLanguageChange(() => redraw?.());
 
   byId('details-button').addEventListener('click', openDetails);
   byId('saved-photo').addEventListener('click', openPhoto);

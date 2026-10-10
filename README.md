@@ -23,6 +23,15 @@ compile and install, and none is available. See [What a web app cannot do](#what
 The arrow is a straight line, not a walking route. For a route, use **Open walking directions in
 Apple Maps** on the guidance screen.
 
+**English and German.** The **EN | DE** switch at the top right of the home screen changes every text
+at once. The app starts in the phone's language (German on a German phone, otherwise English) and
+remembers a manual choice.
+
+**Locked like an app.** The page does not scroll or bounce, and it cannot be zoomed by pinching or
+double-tapping. Each screen resizes its dial or main button to fit the display instead. Text size
+still follows the iOS text-size setting; only at the very largest accessibility sizes, where a screen
+genuinely cannot fit, does that one screen become scrollable so that no button is ever out of reach.
+
 ## Run it on this computer
 
 Requires Node 24 or newer.
@@ -83,7 +92,7 @@ No Mac, Xcode, Apple Developer account or signing is involved.
 
 Verified on a Windows PC:
 
-- `npm run check`: type-check clean, 127 unit tests passing, build succeeds.
+- `npm run check`: type-check clean, 138 unit tests passing, build succeeds.
 - The magnetic model matches all of NOAA's official WMM2025 test values to 0.01°, and an independent
   implementation across the globe.
 - In a desktop browser with the labelled simulation: saving, the vague-fix choices, pin on a map,
@@ -91,6 +100,10 @@ Verified on a Windows PC:
   denied and no-signal messages, arrow direction, north crossing, near-spot hysteresis, stale and weak
   signal states, compass permission prompt, resume from background, light and dark, portrait and
   landscape layout, and loading with the server switched off.
+- Both languages: every key exists in English and German with matching placeholders (unit-tested), and
+  the screens were checked in both.
+- No scrolling: at iPhone 16 sizes (Home Screen app and Safari tab, portrait and landscape) no screen
+  overflows in either language, and scroll, pinch and Ctrl-zoom attempts are ignored.
 
 **Not verified — needs your iPhone:** anything involving the real GPS, the real compass, iOS permission
 prompts, haptics, Home Screen behaviour and Apple Maps. No physical compass test has been done.
@@ -134,6 +147,13 @@ Permissions and weak signals
 - [ ] Indoors or in a multi-storey: the app reports a weak or missing signal, not a confident arrow.
 - [ ] Next to the car or other metal: if the compass degrades, the app says so.
 
+Language, scrolling and zoom
+- [ ] Tap **DE** then **EN**: all text switches immediately. Close and reopen: the choice is kept.
+- [ ] Drag up and down on the home and guidance screens: nothing moves or bounces.
+- [ ] Pinch and double-tap anywhere outside the map: nothing zooms.
+- [ ] Open the map: dragging and pinching the map itself still work.
+- [ ] In parking details, tap the note field: the sheet stays above the keyboard with the field visible.
+
 Offline
 - [ ] Turn on Airplane Mode with Location Services still on. Open Parked: it loads, and the arrow and
       distance work once GPS has a fix. The map background is blank; that is expected.
@@ -166,11 +186,13 @@ src/core/       Pure logic, no browser APIs, fully unit-tested
   session.ts      the saved parking session and its validation
   store.ts        atomic save / replace / clear with read-back verification
   format.ts       distance, accuracy and time wording
+  i18n.ts         all on-screen text in English and German
 src/platform/   Thin wrappers over browser APIs
   location.ts     Geolocation      compass.ts   DeviceOrientation
   storage.ts      IndexedDB        device.ts    haptics, wake lock
   sim.ts          DEBUG ONLY fake sensors (?sim=1)
-src/ui/         Screens: guide.ts (arrow), map.ts, photo.ts, dom.ts
+src/ui/         Screens: guide.ts (arrow), map.ts, photo.ts, dom.ts,
+                language.ts (EN/DE switch), viewport.ts (zoom lock, keyboard)
 src/app.ts      Home screen and wiring
 src/sw.ts       Service worker for offline use
 tests/          node:test unit tests

@@ -44,12 +44,12 @@ describe('distance wording', () => {
 
 describe('accuracy wording', () => {
   it('rounds up, never understating the error', () => {
-    assert.equal(formatAccuracy(4.2), '±5 m');
-    assert.equal(formatAccuracy(0.3), '±1 m');
-    assert.equal(formatAccuracy(11), '±15 m');
-    assert.equal(formatAccuracy(65), '±65 m');
-    assert.equal(formatAccuracy(120), '±150 m');
-    assert.equal(formatAccuracy(3200), '±3.2 km');
+    assert.equal(formatAccuracy(4.2), '±5\u00a0m');
+    assert.equal(formatAccuracy(0.3), '±1\u00a0m');
+    assert.equal(formatAccuracy(11), '±15\u00a0m');
+    assert.equal(formatAccuracy(65), '±65\u00a0m');
+    assert.equal(formatAccuracy(120), '±150\u00a0m');
+    assert.equal(formatAccuracy(3200), '±3.2\u00a0km');
   });
 });
 

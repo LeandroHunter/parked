@@ -65,13 +65,14 @@ export type SpotMap = {
 export async function createSpotMap(
   container: HTMLElement,
   car: Coordinate & { accuracyM: number },
+  labels: { car: string; me: string },
   onTileError: () => void,
 ): Promise<SpotMap> {
   const leaflet = await loadLeaflet();
   const map = baseMap(leaflet, container, car, 18, onTileError);
   const carPoint: Leaflet.LatLngTuple = [car.latitude, car.longitude];
   leaflet.circle(carPoint, { radius: car.accuracyM, color: '#c8401c', weight: 1, fillOpacity: 0.12 }).addTo(map);
-  leaflet.marker(carPoint, { icon: dot(leaflet, 'map-car', 22), alt: 'Your saved spot', keyboard: false }).addTo(map);
+  leaflet.marker(carPoint, { icon: dot(leaflet, 'map-car', 22), alt: labels.car, keyboard: false }).addTo(map);
 
   let meMarker: Leaflet.Marker | null = null;
   let meCircle: Leaflet.Circle | null = null;
@@ -89,7 +90,7 @@ export async function createSpotMap(
       const point: Leaflet.LatLngTuple = [position.latitude, position.longitude];
       if (!meMarker || !meCircle) {
         meCircle = leaflet.circle(point, { radius: position.accuracyM, color: '#1e2124', weight: 1, fillOpacity: 0.08 }).addTo(map);
-        meMarker = leaflet.marker(point, { icon: dot(leaflet, 'map-me', 18), alt: 'You', keyboard: false }).addTo(map);
+        meMarker = leaflet.marker(point, { icon: dot(leaflet, 'map-me', 18), alt: labels.me, keyboard: false }).addTo(map);
       } else {
         meMarker.setLatLng(point);
         meCircle.setLatLng(point).setRadius(position.accuracyM);

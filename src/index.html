@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Parked</title>
+  <meta name="description" content="Remember where you parked and get pointed back to your car.">
+  <meta name="theme-color" content="#F6F3EC" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17191B" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Parked">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============================== Home ============================== -->
+  <main id="home" class="view home">
+    <header class="masthead">
+      <h1 class="wordmark">Parked</h1>
+    </header>
+
+    <!-- No car saved -->
+    <section id="home-empty" class="stage">
+      <div class="lede">
+        <h2>Just parked?</h2>
+        <p>One tap saves this spot on your phone.</p>
+      </div>
+      <button id="park-button" class="orb" type="button">
+        <span class="orb-label">Parked</span>
+      </button>
+      <p class="fineprint install-hint" hidden>
+        Add Parked to your Home Screen (Share › Add to Home Screen) so iOS keeps your saved spot.
+      </p>
+    </section>
+
+    <!-- Getting a fix -->
+    <section id="home-saving" class="stage" hidden>
+      <div class="lede">
+        <h2 id="saving-title" tabindex="-1">Saving your spot…</h2>
+        <p id="saving-detail" aria-live="polite">Getting a fresh GPS fix.</p>
+      </div>
+      <div class="orb orb-busy" role="progressbar" aria-labelledby="saving-title" aria-valuemin="0" aria-valuemax="100" id="saving-progress">
+        <svg class="orb-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="orb-ring-track" cx="60" cy="60" r="56"></circle>
+          <circle class="orb-ring-fill" id="saving-ring" cx="60" cy="60" r="56" pathLength="100"></circle>
+        </svg>
+        <svg class="orb-check" viewBox="0 0 48 48" aria-hidden="true"><path d="M12 25.5l8.5 8.5L37 16"></path></svg>
+        <span class="orb-label orb-label-small" id="saving-accuracy"></span>
+      </div>
+      <button id="saving-cancel" class="button button-quiet" type="button">Cancel</button>
+    </section>
+
+    <!-- Fix too vague to save without asking -->
+    <section id="home-decision" class="stage stage-text" hidden>
+      <div class="lede">
+        <h2 id="decision-title" tabindex="-1">Your location is vague</h2>
+        <p id="decision-detail"></p>
+      </div>
+      <div class="stack">
+        <button id="decision-retry" class="button button-primary" type="button">Try again</button>
+        <button id="decision-adjust" class="button button-secondary" type="button">Adjust the pin on a map</button>
+        <button id="decision-approx" class="button button-secondary" type="button">Save approximate spot</button>
+        <button id="decision-cancel" class="button button-quiet" type="button">Cancel</button>
+      </div>
+    </section>
+
+    <!-- Could not get or save a location -->
+    <section id="home-problem" class="stage stage-text" hidden>
+      <div class="lede">
+        <h2 id="problem-title" tabindex="-1"></h2>
+        <p id="problem-detail"></p>
+        <ol id="problem-steps" class="steps" hidden></ol>
+      </div>
+      <div class="stack">
+        <button id="problem-retry" class="button button-primary" type="button">Try again</button>
+        <button id="problem-cancel" class="button button-quiet" type="button">Back</button>
+      </div>
+    </section>
+
+    <!-- Car is saved -->
+    <section id="home-saved" class="stage" hidden>
+      <div class="lede">
+        <h2 id="saved-title" tabindex="-1"></h2>
+        <p id="saved-accuracy"></p>
+      </div>
+
+      <div class="spot" id="saved-spot">
+        <button id="saved-photo" class="spot-photo" type="button" hidden aria-label="View parking photo"><img alt=""></button>
+        <dl class="spot-facts" id="saved-facts"></dl>
+        <button id="details-button" class="button button-chip" type="button"></button>
+      </div>
+
+      <button id="find-button" class="orb" type="button">
+        <svg class="orb-glyph" viewBox="-24 -24 48 48" aria-hidden="true"><path d="M0 -17L13 15L0 8.5L-13 15Z"></path></svg>
+        <span class="orb-label orb-label-medium">Find my car</span>
+      </button>
+
+      <div class="row">
+        <button id="found-button" class="button button-secondary" type="button">I found my car</button>
+        <button id="repark-button" class="button button-secondary" type="button">Park here instead</button>
+      </div>
+      <p class="fineprint install-hint" hidden>
+        Add Parked to your Home Screen (Share › Add to Home Screen) so iOS keeps your saved spot.
+      </p>
+    </section>
+  </main>
+
+  <!-- ============================ Guidance ============================ -->
+  <main id="guide" class="view guide" hidden>
+    <header class="bar">
+      <button id="guide-back" class="button button-bar" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        <span>Back</span>
+      </button>
+      <button id="guide-map" class="button button-bar" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2zM9 4.5v13M15 6.5v13"></path></svg>
+        <span>Map</span>
+      </button>
+    </header>
+
+    <div class="guide-body">
+      <div class="dial" id="dial" role="img" aria-label="Direction to your car" data-mode="waiting">
+        <svg viewBox="-160 -160 320 320" aria-hidden="true">
+          <path class="dial-top" d="M0 -160l5.5 8h-11z"></path>
+          <g id="dial-ring" class="dial-ring">
+            <circle r="132" class="dial-circle"></circle>
+            <g id="dial-ticks"></g>
+            <text class="dial-north" y="-101" text-anchor="middle">N</text>
+          </g>
+          <g id="dial-arrow" class="dial-arrow">
+            <path id="dial-spread" class="dial-spread" d=""></path>
+            <path class="dial-arrow-a" d="M0 -86L-47 62L0 35Z"></path>
+            <path class="dial-arrow-b" d="M0 -86L47 62L0 35Z"></path>
+          </g>
+          <g class="dial-near">
+            <circle r="88" class="dial-near-ring dial-near-ring-2"></circle>
+            <circle r="52" class="dial-near-ring"></circle>
+            <circle r="15" class="dial-near-dot"></circle>
+          </g>
+          <g class="dial-off">
+            <circle r="88" class="dial-off-ring"></circle>
+          </g>
+        </svg>
+        <p class="dial-caption" id="dial-caption" aria-hidden="true"></p>
+        <p class="dial-sim" id="dial-sim" hidden>Simulated</p>
+      </div>
+
+      <div class="readout">
+        <p class="distance" id="distance" aria-live="off"><span class="distance-value" id="distance-value">–</span><span class="distance-unit" id="distance-unit"></span></p>
+        <p class="distance-caption" id="distance-caption"></p>
+
+        <ul class="signals" id="signals" aria-label="Signal quality">
+          <li id="signal-location" data-level="0">
+            <span class="meter" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span id="signal-location-text">Location</span>
+          </li>
+          <li id="signal-compass" data-level="0">
+            <span class="meter" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span id="signal-compass-text">Compass</span>
+          </li>
+        </ul>
+
+        <div class="advice" id="advice" hidden>
+          <p id="advice-text"></p>
+          <button id="compass-enable" class="button button-primary button-small" type="button" hidden>Enable compass</button>
+        </div>
+
+        <div class="spot spot-compact" id="guide-spot" hidden>
+          <button id="guide-photo" class="spot-photo" type="button" hidden aria-label="View parking photo"><img alt=""></button>
+          <dl class="spot-facts" id="guide-facts"></dl>
+        </div>
+      </div>
+    </div>
+
+    <footer class="guide-actions">
+      <p class="fineprint">The arrow shows a straight line, not a walking route. It can point through buildings, fences or across roads.</p>
+      <a id="maps-link" class="button button-secondary" href="#" target="_blank" rel="noopener">Open walking directions in Apple Maps</a>
+      <button id="guide-found" class="button button-primary" type="button">I found my car</button>
+    </footer>
+    <p id="guide-announcer" class="visually-hidden" aria-live="polite"></p>
+  </main>
+
+  <!-- ============================= Sheets ============================= -->
+  <dialog id="details-sheet" class="sheet" aria-labelledby="details-heading">
+    <form id="details-form" method="dialog" novalidate>
+      <header class="sheet-header">
+        <h2 id="details-heading">Parking details</h2>
+        <button class="button button-bar button-strong" type="submit" id="details-done">Done</button>
+      </header>
+      <p class="sheet-note">Optional. These help when GPS can't, like in a multi-storey or underground car park.</p>
+      <label class="field">
+        <span>Level or floor</span>
+        <input id="details-level" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" maxlength="24" placeholder="P2" enterkeyhint="next">
+      </label>
+      <label class="field">
+        <span>Bay or note</span>
+        <input id="details-note" type="text" autocomplete="off" maxlength="140" placeholder="Bay 417, near the lifts" enterkeyhint="done">
+      </label>
+      <div class="field">
+        <span id="details-photo-label">Photo</span>
+        <div class="photo-row">
+          <img id="details-photo-preview" alt="Parking photo" hidden>
+          <div class="stack stack-tight">
+            <label class="button button-secondary button-small" id="details-photo-pick">
+              <span id="details-photo-pick-text">Add a photo</span>
+              <input id="details-photo-input" type="file" accept="image/*" class="visually-hidden" aria-labelledby="details-photo-label">
+            </label>
+            <button class="button button-quiet button-small" type="button" id="details-photo-remove" hidden>Remove photo</button>
+          </div>
+        </div>
+      </div>
+      <button class="button button-secondary" type="button" id="details-adjust">Adjust the pin on a map</button>
+      <p class="sheet-error" id="details-error" role="alert" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-sheet" class="sheet sheet-confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-text"></p>
+      <div class="stack">
+        <button class="button button-primary" value="confirm" id="confirm-yes"></button>
+        <button class="button button-secondary" value="cancel" id="confirm-no"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="pin-sheet" class="sheet sheet-map" aria-labelledby="pin-heading">
+    <header class="sheet-header">
+      <button class="button button-bar" type="button" id="pin-cancel">Cancel</button>
+      <h2 id="pin-heading">Adjust pin</h2>
+      <button class="button button-bar button-strong" type="button" id="pin-save">Use this spot</button>
+    </header>
+    <p class="sheet-note" id="pin-note">Drag the map until the pin sits on your car.</p>
+    <div class="map-frame">
+      <div id="pin-map" class="map"></div>
+      <svg class="map-crosshair" viewBox="0 0 40 52" aria-hidden="true"><path d="M20 50C20 50 4 31 4 19a16 16 0 0132 0c0 12-16 31-16 31z"></path><circle cx="20" cy="19" r="6"></circle></svg>
+    </div>
+    <p class="sheet-error" id="pin-error" role="alert" hidden></p>
+  </dialog>
+
+  <dialog id="map-sheet" class="sheet sheet-map" aria-labelledby="map-heading">
+    <header class="sheet-header">
+      <h2 id="map-heading">Map</h2>
+      <button class="button button-bar button-strong" type="button" id="map-close">Done</button>
+    </header>
+    <p class="sheet-note" id="map-note"></p>
+    <div class="map-frame">
+      <div id="spot-map" class="map"></div>
+    </div>
+  </dialog>
+
+  <dialog id="photo-sheet" class="sheet sheet-photo" aria-label="Parking photo">
+    <img id="photo-full" alt="Parking photo">
+    <form method="dialog"><button class="button button-secondary">Close</button></form>
+  </dialog>
+</body>
+</html>

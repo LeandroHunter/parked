@@ -53,6 +53,8 @@ await mkdir(path.join(dist, 'vendor'), { recursive: true });
 await cp(path.join(leaflet, 'leaflet-src.esm.js'), path.join(dist, 'vendor', 'leaflet.js'));
 await cp(path.join(leaflet, 'leaflet.css'), path.join(dist, 'vendor', 'leaflet.css'));
 await cp(path.join(leaflet, 'images'), path.join(dist, 'vendor', 'images'), { recursive: true });
+// Leaflet's BSD licence asks for its notice to travel with every copy that is distributed.
+await cp(path.join(leaflet, '..', 'LICENSE'), path.join(dist, 'vendor', 'LEAFLET-LICENSE.txt'));
 await writeFile(
   path.join(dist, 'vendor', 'leaflet.js'),
   (await readFile(path.join(dist, 'vendor', 'leaflet.js'), 'utf8')).replace(/\n\/\/# sourceMappingURL=.*\s*$/, '\n'),

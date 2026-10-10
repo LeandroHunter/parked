@@ -1,7 +1,7 @@
 {
   "name": "Parked",
   "short_name": "Parked",
-  "description": "Remember where you parked and get pointed back to your car.",
+  "description": "One tap saves where you parked. A live compass arrow walks you back to your car.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

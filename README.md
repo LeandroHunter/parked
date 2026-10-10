@@ -1,10 +1,22 @@
 # Parked
 
-Remember where you parked, and get pointed back to your car.
+**One tap when you park. One arrow to walk you back.**
+
+Parked remembers where you left your car. Tap the button as you get out, and it saves the spot from a
+fresh GPS fix. When you come back, a large compass arrow points straight at the car and counts down
+the distance, turning with you as you turn. Add the level, a bay number or a photo for the places GPS
+cannot reach, like a multi-storey or an underground car park.
+
+- **Fast.** One tap to save, one tap to find.
+- **Honest.** It shows how accurate each reading is and says so when the signal is too weak to trust.
+- **Private.** No account, no server, no tracking. Your spot, note and photo never leave the phone.
+- **Works offline.** Once installed it opens and guides you without a connection.
+- **English and German.**
+
+**Open it: <https://leandrohunter.github.io/parked/>**
 
 Parked is a web app for the iPhone. You open it in Safari and add it to your Home Screen; after that it
-opens full-screen like an app and works without a connection. There is no account, no server and no
-tracking: the saved spot, note and photo stay in the app's private storage on the phone.
+opens full-screen like an app.
 
 It was built as a web app, not a native Swift app, because a native app needs a Mac with Xcode to
 compile and install, and none is available. See [What a web app cannot do](#what-a-web-app-cannot-do).
@@ -201,3 +213,12 @@ scripts/        build.ts, serve.ts, make-icons.ps1
 
 The only runtime dependency is Leaflet, copied into the build so nothing is loaded from a third-party
 server except map tiles.
+
+## License
+
+Copyright © 2026 LeandroHunter. All rights reserved.
+
+This is not open-source software. The code is public so the app can be hosted, not so it can be reused:
+no permission is given to copy, modify, redistribute or host it. See [LICENSE](LICENSE), which also
+lists the third-party components (Leaflet, the World Magnetic Model, OpenStreetMap) that stay under
+their own terms.

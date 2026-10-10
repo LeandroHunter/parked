@@ -1,0 +1,38 @@
+Parked
+Copyright (c) 2026 LeandroHunter. All rights reserved.
+
+This software and its source code, design, text and artwork ("the Software")
+are the exclusive property of LeandroHunter.
+
+No licence is granted. Without prior written permission from the copyright
+holder you may not copy, modify, merge, publish, distribute, sublicense, sell,
+host, or otherwise use the Software or any part of it, in source or built form.
+
+Viewing the source code where the copyright holder has made it publicly
+available does not grant any of the rights above.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+Third-party components
+----------------------
+
+The following are not covered by the notice above. They belong to their own
+authors and remain under their own terms.
+
+- Leaflet (https://leafletjs.com), copyright (c) 2010-2023 Volodymyr Agafonkin
+  and (c) 2010-2011 CloudMade, BSD 2-Clause License. A copy of that licence is
+  shipped with the built site as vendor/LEAFLET-LICENSE.txt.
+
+- World Magnetic Model 2025 coefficients (src/core/wmm-coefficients.ts),
+  produced by NOAA NCEI and the British Geological Survey, public domain.
+
+- Map tiles and map data shown in the app are (c) OpenStreetMap contributors,
+  available under the Open Database License (https://www.openstreetmap.org/copyright).
+  They are loaded from OpenStreetMap at run time and are not part of this
+  repository.

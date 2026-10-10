@@ -2,7 +2,10 @@
   "name": "parked",
   "version": "1.0.0",
   "private": true,
-  "description": "Parked — remember where you parked and get guided back to your car.",
+  "description": "One tap saves where you parked; a live compass arrow walks you back. Installable iPhone web app.",
+  "author": "LeandroHunter",
+  "license": "UNLICENSED",
+  "homepage": "https://leandrohunter.github.io/parked/",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.ts",
